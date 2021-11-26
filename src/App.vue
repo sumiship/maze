@@ -2,17 +2,25 @@
   <div class="maze">
     <div class="maze__board">
       <div :style="styleMazeRow" class="maze_row" v-for="(mazeRow, rowIndex) in mazeBoard" :key="rowIndex">
-        <div :style="styleMazeCell(mazeCell)" class="maze_cell" v-for="(mazeCell, cellIndex) in mazeRow" :key="cellIndex"></div>
+        <div :style="[styleMazeCell, colorMazeCell(mazeCell)]" class="maze_cell" v-for="(mazeCell, cellIndex) in mazeRow" :key="cellIndex"></div>
       </div>
     </div>
   </div>
   <div class="control">
     <div class="control__button" @click="reset()">RESET</div>
     <div class="control__button" @click="createMaze()">START</div>
-    <div class="control__button" @click="search()">ROUTE</div>
+    <div class="control__button" @click="search()" :style="styleRouteButton">ROUTE</div>
     <div class="control__range">
       <p>Speed:{{ viewSpeed }}</p>
       <input type="range" max="100" min="2" v-model="viewSpeed" />
+    </div>
+    <div class="control__button">
+      <p style="font-size: 1.3vh">横(奇数)</p>
+      <input type="number" v-model="mazeSize.x" step="2" min="5" @change="mazeSize.x = formOddNumber(mazeSize.x)" />
+    </div>
+    <div class="control__button">
+      <p style="font-size: 1.3vh">縦(奇数)</p>
+      <input type="number" v-model="mazeSize.y" step="2" min="5" @change="mazeSize.x = formOddNumber(mazeSize.x)" />
     </div>
   </div>
 </template>
@@ -29,27 +37,43 @@ interface Data {
   mazeBoard: number[][];
   startCells: Cell[];
   viewSpeed: number;
+  made: boolean;
 }
 
 export default defineComponent({
   data(): Data {
     return {
-      mazeSize: { x: 51, y: 51 },
+      mazeSize: { x: 31, y: 31 },
       mazeBoard: [[]],
       startCells: [],
       viewSpeed: 20,
+      made: false,
     };
   },
   computed: {
     styleMazeRow(): string {
-      const check: number = this.mazeSize.x > this.mazeSize.y ? this.mazeSize.x : this.mazeSize.y;
-      return `height: ${(100 / check) * 0.85}vh`;
+      return `height: ${(100 / this.mazeSize.y) * 0.85}vh`;
+    },
+    styleMazeCell(): string {
+      return `width: ${(100 / this.mazeSize.y) * 0.85}vh`;
+    },
+    styleRouteButton(): string {
+      if (this.made) {
+        return "";
+      } else {
+        return "pointer-events: none; opacity: 0.3";
+      }
     },
   },
 
   methods: {
-    styleMazeCell(cell: number): string {
-      const check: number = this.mazeSize.x > this.mazeSize.y ? this.mazeSize.x : this.mazeSize.y;
+    formOddNumber(number: number): number {
+      let ans = Math.floor(number);
+      if (ans % 2 != 1) ans++;
+      if (ans < 5) ans = 5;
+      return ans;
+    },
+    colorMazeCell(cell: number): string {
       let backgroundColor: string;
       switch (cell) {
         case 1:
@@ -67,12 +91,13 @@ export default defineComponent({
         default:
           backgroundColor = "#0A412E";
       }
-      return `width: ${(100 / check) * 0.85}vh; background-color: ${backgroundColor}`;
+      return `background-color: ${backgroundColor}`;
     },
     async createMaze(): Promise<void> {
+      const beginCell: Cell = { x: 1 + Math.floor(Math.random() * ((this.mazeSize.x - 1) / 2)) * 2, y: 1 + Math.floor(Math.random() * ((this.mazeSize.y - 1) / 2)) * 2 };
       for (let y = 0; y < this.mazeSize.y; y++) {
         for (let x = 0; x < this.mazeSize.x; x++) {
-          if (x == 1 && y == 1) {
+          if (x == beginCell.x && y == beginCell.y) {
             this.mazeBoard[y][x] = 1;
           } else {
             this.mazeBoard[y][x] = 0;
@@ -80,7 +105,7 @@ export default defineComponent({
         }
       }
       // 穴掘り開始
-      await this.dig({ x: 1, y: 1 });
+      await this.dig(beginCell);
     },
     async dig(cell: Cell): Promise<void> {
       for (;;) {
@@ -97,7 +122,6 @@ export default defineComponent({
         if (cell.x - 2 >= 0) {
           if (this.mazeBoard[cell.y][cell.x - 1] == 0 && this.mazeBoard[cell.y][cell.x - 2] == 0) directions.push(3);
         }
-        // console.log(directions);
 
         // 掘り進められない場合、ループを抜ける
         if (directions.length == 0) break;
@@ -129,6 +153,8 @@ export default defineComponent({
 
       if (startCell != null) {
         this.dig(startCell);
+      } else {
+        this.made = true;
       }
     },
     setPath(cell: Cell): Promise<void> {
@@ -150,8 +176,11 @@ export default defineComponent({
     },
 
     async search() {
+      this.made = false;
+
       let isGoaled = false;
       let queue: Cell[] = [];
+
       queue.push({ x: 1, y: 1 });
       let visited: Cell[][] = [...Array(this.mazeSize.y)].map(() => Array(this.mazeSize.x).fill({ x: -1, y: -1 }));
 
@@ -221,9 +250,22 @@ export default defineComponent({
     },
 
     reset() {
+      this.mazeBoard = [[]];
+      this.made = false;
       for (let i = 0; i < this.mazeSize.y; i++) {
         this.mazeBoard[i] = Array(this.mazeSize.x).fill(0);
       }
+    },
+  },
+
+  watch: {
+    mazeSize: {
+      handler: function () {
+        if (this.mazeSize.x % 2 == 1 && this.mazeSize.y % 2 == 1) {
+          this.reset();
+        }
+      },
+      deep: true,
     },
   },
 
